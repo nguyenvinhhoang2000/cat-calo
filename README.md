@@ -12,6 +12,7 @@ Dựng bằng **Next.js 16 (App Router)** · **HeroUI v3** · **Tailwind CSS v4*
 - 🎯 Đặt mục tiêu calo mỗi ngày, kèm bộ **gợi ý theo cơ thể** (Mifflin–St Jeor, chọn nam/nữ)
 - 📅 **Lịch sử theo ngày:** xem lại nhật ký từng ngày, biểu đồ 7 ngày, số ngày đạt mục tiêu
 - ☁️ Lưu dữ liệu trên **Supabase** (đồng bộ theo mã thiết bị)
+- 📲 **PWA:** cài đặt như ứng dụng trên điện thoại/desktop, có màn hình offline
 - 📱 Responsive, chạy tốt trên điện thoại
 
 ## Yêu cầu
@@ -57,10 +58,17 @@ app/
   layout.tsx        # Bố cục gốc, nạp font Fredoka + Nunito
   page.tsx          # Toàn bộ logic & giao diện ứng dụng
   globals.css       # Tailwind + HeroUI + bảng màu hồng pastel
+app/
+  manifest.ts       # Web App Manifest (PWA)
+  offline/page.tsx  # Màn hình dự phòng khi mất mạng
 components/
   CatMascot.tsx     # Bé mèo SVG, đổi biểu cảm theo tâm trạng
   CalorieRing.tsx   # Vòng tròn tiến độ calo có mèo ở giữa
   HistoryPanel.tsx  # Biểu đồ & danh sách lịch sử nhiều ngày
+  ServiceWorkerRegister.tsx  # Đăng ký service worker (PWA)
+public/
+  sw.js             # Service worker (cache app shell + offline)
+  icons/            # Icon PWA (192, 512, maskable, apple-touch)
 lib/
   foods.ts          # Danh sách bữa ăn & món thêm nhanh
   supabase.ts       # Khởi tạo client Supabase
