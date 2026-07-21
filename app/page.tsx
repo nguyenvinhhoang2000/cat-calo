@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Chip, Input } from "@heroui/react";
 import CalorieRing from "@/components/CalorieRing";
 import CatMascot from "@/components/CatMascot";
@@ -49,6 +49,11 @@ export default function Page() {
   const [err, setErr] = useState<string | null>(null);
 
   const [goal, setGoal] = useState(DEFAULT_GOAL);
+  // Giá trị mục tiêu đang thực sự lưu trong Supabase cho ngày đang xem
+  // (null = ngày này chưa từng đặt mục tiêu). Dùng để biết có thay đổi
+  // chưa lưu hay không.
+  const [savedGoal, setSavedGoal] = useState<number | null>(null);
+  const [savingGoal, setSavingGoal] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [history, setHistory] = useState<HistoryDay[]>([]);
 
@@ -56,8 +61,6 @@ export default function Page() {
   const [kcal, setKcal] = useState("");
   const [meal, setMeal] = useState<MealType>("breakfast");
   const [showCalc, setShowCalc] = useState(false);
-
-  const goalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Lấy mã thiết bị sau khi mount (chỉ có ở phía client).
   useEffect(() => {
@@ -81,6 +84,7 @@ export default function Page() {
         const hist = await getHistory(deviceId, 7);
         if (cancelled) return;
         setGoal(g);
+        setSavedGoal(data.goal); // giá trị đã lưu thật cho ngày này (có thể null)
         setEntries(data.entries);
         setHistory(hist);
         setErr(null);
@@ -174,20 +178,28 @@ export default function Page() {
     }
   }
 
-  // Cập nhật mục tiêu: đổi ngay trên giao diện, lưu Supabase sau 600ms.
-  function commitGoal(v: number) {
-    setGoal(v);
-    if (!isSupabaseConfigured || !deviceId) return;
-    if (goalTimer.current) clearTimeout(goalTimer.current);
-    const date = selectedDate;
-    goalTimer.current = setTimeout(() => {
-      upsertGoal(deviceId, date, v)
-        .then(refreshHistory)
-        .catch((e) => setErr(errMsg(e)));
-    }, 600);
+  // Lưu mục tiêu của ngày đang xem vào Supabase (nhấn nút mới lưu).
+  async function saveGoal(value: number) {
+    if (!value || value <= 0) return;
+    if (!isSupabaseConfigured || !deviceId) {
+      setSavedGoal(value); // chế độ tạm: coi như đã "lưu" trong bộ nhớ
+      return;
+    }
+    setSavingGoal(true);
+    try {
+      await upsertGoal(deviceId, selectedDate, value);
+      setSavedGoal(value);
+      setErr(null);
+      refreshHistory();
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setSavingGoal(false);
+    }
   }
 
   const canGoNext = !isToday(selectedDate);
+  const goalDirty = goal > 0 && goal !== savedGoal;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:py-10">
@@ -486,13 +498,30 @@ export default function Page() {
                     type="number"
                     inputMode="numeric"
                     value={String(goal)}
-                    onChange={(e) => commitGoal(Number(e.target.value) || 0)}
+                    onChange={(e) => setGoal(Number(e.target.value) || 0)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && goalDirty) saveGoal(goal);
+                    }}
                     className="flex-1"
                   />
                   <span className="text-sm font-semibold text-plum-soft">
                     kcal
                   </span>
                 </div>
+
+                <Button
+                  variant="primary"
+                  fullWidth
+                  isDisabled={!goalDirty || savingGoal}
+                  onPress={() => saveGoal(goal)}
+                  className="rounded-full font-bold disabled:opacity-60"
+                >
+                  {savingGoal
+                    ? "Đang lưu..."
+                    : goalDirty
+                      ? "Lưu mục tiêu 💾"
+                      : "Đã lưu ✓"}
+                </Button>
 
                 <Button
                   size="sm"
@@ -504,7 +533,14 @@ export default function Page() {
                   {showCalc ? "Ẩn gợi ý" : "Gợi ý theo cơ thể 🧮"}
                 </Button>
 
-                {showCalc && <GoalCalculator onApply={(v) => commitGoal(v)} />}
+                {showCalc && (
+                  <GoalCalculator
+                    onApply={(v) => {
+                      setGoal(v);
+                      saveGoal(v);
+                    }}
+                  />
+                )}
               </Card.Content>
             </Card>
 
