@@ -1,0 +1,90 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+/* ---------------------------------------------------------------
+   Bảng màu & typography riêng cho MèoCalo (hồng pastel dễ thương)
+   --------------------------------------------------------------- */
+@theme {
+  --font-display: "Fredoka", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Nunito", ui-sans-serif, system-ui, sans-serif;
+
+  --color-blush: #fff2f7;      /* nền trang */
+  --color-cream: #fffdfe;      /* nền thẻ */
+  --color-rose: #ec6a96;       /* hồng đậm chủ đạo */
+  --color-rose-deep: #d94e80;  /* hover */
+  --color-rose-soft: #fbd5e3;  /* hồng nhạt */
+  --color-rose-tint: #ffe7ef;  /* hồng phớt */
+  --color-plum: #6b3f52;       /* chữ tiêu đề */
+  --color-plum-soft: #9a7280;  /* chữ phụ */
+  --color-mint: #a9e3cf;       /* xanh mint điểm nhấn */
+  --color-peach: #ffd6bf;      /* cam đào */
+  --color-lilac: #e9d8f6;      /* tím lavender */
+  --color-butter: #fff0c4;     /* vàng bơ */
+}
+
+/* Ánh xạ màu chủ đạo của HeroUI sang tông hồng */
+:root,
+[data-theme="light"] {
+  --accent: oklch(0.68 0.16 356);
+  --accent-hover: oklch(0.62 0.17 356);
+  --accent-foreground: oklch(0.99 0.01 340);
+  --accent-soft: oklch(0.93 0.05 350);
+  --accent-soft-foreground: oklch(0.45 0.12 356);
+}
+
+html,
+body {
+  background-color: var(--color-blush);
+  color: var(--color-plum);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Nền có hoạ tiết chấm bi mờ dịu mắt */
+body {
+  background-image:
+    radial-gradient(circle at 20% 15%, rgba(255, 214, 231, 0.55), transparent 42%),
+    radial-gradient(circle at 85% 8%, rgba(233, 216, 246, 0.5), transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(169, 227, 207, 0.35), transparent 45%),
+    radial-gradient(rgba(236, 106, 150, 0.06) 1.4px, transparent 1.4px);
+  background-size: auto, auto, auto, 22px 22px;
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Thanh cuộn hồng cho khớp chủ đề */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-rose-soft) transparent;
+}
+
+/* Hiệu ứng chuyển động nhẹ nhàng */
+@keyframes floaty {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-8px) rotate(2deg); }
+}
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.9) translateY(6px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-6deg); }
+  75% { transform: rotate(6deg); }
+}
+
+.animate-floaty { animation: floaty 4.5s ease-in-out infinite; }
+.animate-pop-in { animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.animate-wiggle { animation: wiggle 0.6s ease-in-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-floaty,
+  .animate-pop-in,
+  .animate-wiggle {
+    animation: none;
+  }
+}
