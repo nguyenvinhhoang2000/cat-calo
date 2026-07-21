@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MèoCalo 🐱 — Theo dõi calo mỗi ngày",
+  title: "LoopyCalo 🦫 — Theo dõi calo mỗi ngày",
   description:
-    "Ứng dụng dễ thương giúp bạn ghi lại và theo dõi lượng calo nạp vào trong ngày.",
+    "Ứng dụng dễ thương giúp bạn ghi lại và theo dõi lượng calo nạp vào trong ngày cùng bé Loopy.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ec6a96",
+  themeColor: "#f472a0",
   width: "device-width",
   initialScale: 1,
 };

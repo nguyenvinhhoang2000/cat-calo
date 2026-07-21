@@ -1,7 +1,7 @@
 import * as React from "react";
-import CatMascot, { CatMood } from "./CatMascot";
+import LoopyMascot, { Mood } from "./LoopyMascot";
 
-function moodFor(pct: number): CatMood {
+function moodFor(pct: number): Mood {
   if (pct <= 0) return "hungry";
   if (pct < 55) return "happy";
   if (pct < 90) return "content";
@@ -32,8 +32,8 @@ export function CalorieRing({
       <svg viewBox="0 0 220 220" className="w-[260px] h-[260px] max-w-full">
         <defs>
           <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#ffb3cd" />
-            <stop offset="100%" stopColor={over ? "#d94e80" : "#ec6a96"} />
+            <stop offset="0%" stopColor="#ffb3d2" />
+            <stop offset="100%" stopColor={over ? "#e85c8f" : "#f472a0"} />
           </linearGradient>
         </defs>
 
@@ -65,7 +65,7 @@ export function CalorieRing({
 
       {/* Mèo + số liệu ở giữa */}
       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-        <CatMascot mood={mood} size={116} className="animate-floaty -mt-2" />
+        <LoopyMascot mood={mood} size={116} className="animate-floaty -mt-2" />
         <div className="text-center -mt-1">
           <div className="font-display text-3xl font-bold leading-none text-plum">
             {Math.round(consumed)}
