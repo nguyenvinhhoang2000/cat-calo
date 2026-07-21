@@ -2,18 +2,18 @@
 @import "@heroui/styles";
 
 /* ---------------------------------------------------------------
-   Bảng màu & typography riêng cho LoopyCalo (hồng Loopy dễ thương)
+   Bảng màu & typography riêng cho MèoCalo (hồng pastel dễ thương)
    --------------------------------------------------------------- */
 @theme {
   --font-display: "Fredoka", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Nunito", ui-sans-serif, system-ui, sans-serif;
 
-  --color-blush: #fff1f6;      /* nền trang */
+  --color-blush: #fff2f7;      /* nền trang */
   --color-cream: #fffdfe;      /* nền thẻ */
-  --color-rose: #f472a0;       /* hồng Loopy chủ đạo */
-  --color-rose-deep: #e85c8f;  /* hover */
-  --color-rose-soft: #fcd3e2;  /* hồng nhạt */
-  --color-rose-tint: #ffe6ef;  /* hồng phớt */
+  --color-rose: #ec6a96;       /* hồng đậm chủ đạo */
+  --color-rose-deep: #d94e80;  /* hover */
+  --color-rose-soft: #fbd5e3;  /* hồng nhạt */
+  --color-rose-tint: #ffe7ef;  /* hồng phớt */
   --color-plum: #6b3f52;       /* chữ tiêu đề */
   --color-plum-soft: #9a7280;  /* chữ phụ */
   --color-mint: #a9e3cf;       /* xanh mint điểm nhấn */

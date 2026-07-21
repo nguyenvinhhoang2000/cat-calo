@@ -4,7 +4,7 @@ import * as React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Chip, Input } from "@heroui/react";
 import CalorieRing from "@/components/CalorieRing";
-import LoopyMascot from "@/components/LoopyMascot";
+import CatMascot from "@/components/CatMascot";
 import HistoryPanel from "@/components/HistoryPanel";
 import { MEALS, MealType, QUICK_FOODS } from "@/lib/foods";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -206,13 +206,13 @@ export default function Page() {
       {/* Tiêu đề */}
       <header className="mb-6 flex flex-col items-center text-center">
         <div className="flex items-center gap-3">
-          <LoopyMascot mood="happy" size={64} className="animate-floaty" />
+          <CatMascot mood="happy" size={64} className="animate-floaty" />
           <h1 className="font-display text-4xl font-bold text-plum sm:text-5xl">
-            Loopy<span className="text-rose">Calo</span>
+            Mèo<span className="text-rose">Calo</span>
           </h1>
         </div>
         <p className="mt-2 text-sm font-semibold text-plum-soft sm:text-base">
-          Ghi lại calo mỗi ngày cùng bé Loopy dễ thương 🐾
+          Ghi lại calo mỗi ngày cùng bé mèo dễ thương 🐾
         </p>
       </header>
 
@@ -393,9 +393,9 @@ export default function Page() {
             <Card.Content>
               {entries.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-8 text-center">
-                  <LoopyMascot mood="hungry" size={96} />
+                  <CatMascot mood="hungry" size={96} />
                   <p className="font-semibold text-plum">
-                    Bé Loopy đang đói bụng!
+                    Bé mèo đang đói bụng!
                   </p>
                   <p className="text-sm text-plum-soft">
                     Thêm món đầu tiên của ngày ở phía trên nhé.
@@ -576,7 +576,7 @@ export default function Page() {
       </div>
 
       <footer className="mt-10 text-center text-xs text-plum-soft/70">
-        LoopyCalo 🦫 · Dữ liệu lưu trên Supabase · Calo chỉ mang tính tham khảo
+        MèoCalo 🐱 · Dữ liệu lưu trên Supabase · Calo chỉ mang tính tham khảo
       </footer>
     </main>
   );
