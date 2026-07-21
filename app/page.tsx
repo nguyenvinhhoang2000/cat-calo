@@ -275,14 +275,16 @@ export default function Page() {
       )}
 
       <div
-        className={`grid gap-6 transition-opacity lg:grid-cols-3 ${
+        className={`flex flex-col gap-6 transition-opacity lg:grid lg:grid-cols-3 lg:items-start ${
           loading ? "opacity-60" : "opacity-100"
         }`}
       >
-        {/* Cột trái: nhập món + nhật ký */}
-        <div className="space-y-6 lg:col-span-2">
+        {/* Cột chính (thứ tự hiển thị do class order-* quyết định:
+            trên mobile xếp chồng theo order toàn cục, trên desktop
+            mỗi cột tự sắp theo order riêng) */}
+        <div className="contents lg:flex lg:flex-col lg:gap-6 lg:col-span-2">
           {/* Thêm món */}
-          <Card className="border border-rose-soft/60 bg-cream shadow-sm">
+          <Card className="order-3 border border-rose-soft/60 bg-cream shadow-sm">
             <Card.Header>
               <Card.Title className="font-display text-xl font-bold text-plum">
                 Hôm nay bạn ăn gì? 🍽️
@@ -343,7 +345,7 @@ export default function Page() {
           </Card>
 
           {/* Thêm nhanh */}
-          <Card className="border border-rose-soft/60 bg-cream shadow-sm">
+          <Card className="order-4 border border-rose-soft/60 bg-cream shadow-sm">
             <Card.Header>
               <Card.Title className="font-display text-lg font-bold text-plum">
                 Thêm nhanh 💕
@@ -372,7 +374,7 @@ export default function Page() {
           </Card>
 
           {/* Nhật ký theo bữa */}
-          <Card className="border border-rose-soft/60 bg-cream shadow-sm">
+          <Card className="order-2 border border-rose-soft/60 bg-cream shadow-sm">
             <Card.Header className="flex items-center justify-between">
               <Card.Title className="font-display text-lg font-bold text-plum">
                 Nhật ký {isToday(selectedDate) ? "hôm nay" : "ngày này"} 📖
@@ -456,10 +458,9 @@ export default function Page() {
           </Card>
         </div>
 
-        {/* Cột phải: vòng calo + mục tiêu + lịch sử */}
-        <div className="lg:col-span-1">
-          <div className="space-y-6 lg:sticky lg:top-6">
-            <Card className="border border-rose-soft/60 bg-cream shadow-sm">
+        {/* Cột phụ: vòng calo + mục tiêu + lịch sử */}
+        <div className="contents lg:flex lg:flex-col lg:gap-6 lg:col-span-1 lg:sticky lg:top-6 lg:self-start">
+            <Card className="order-1 border border-rose-soft/60 bg-cream shadow-sm">
               <Card.Content className="flex flex-col items-center pt-6">
                 <CalorieRing consumed={consumed} goal={goal} />
 
@@ -485,7 +486,7 @@ export default function Page() {
             </Card>
 
             {/* Mục tiêu */}
-            <Card className="border border-rose-soft/60 bg-cream shadow-sm">
+            <Card className="order-5 border border-rose-soft/60 bg-cream shadow-sm">
               <Card.Header>
                 <Card.Title className="font-display text-lg font-bold text-plum">
                   Mục tiêu mỗi ngày 🎯
@@ -546,7 +547,7 @@ export default function Page() {
 
             {/* Lịch sử 7 ngày */}
             {isSupabaseConfigured && (
-              <Card className="border border-rose-soft/60 bg-cream shadow-sm">
+              <Card className="order-6 border border-rose-soft/60 bg-cream shadow-sm">
                 <Card.Header>
                   <Card.Title className="font-display text-lg font-bold text-plum">
                     Lịch sử 7 ngày 📅
@@ -571,7 +572,6 @@ export default function Page() {
                 </Card.Content>
               </Card>
             )}
-          </div>
         </div>
       </div>
 
