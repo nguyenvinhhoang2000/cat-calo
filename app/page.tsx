@@ -1,21 +1,33 @@
 "use client";
 
 import * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Chip, Input } from "@heroui/react";
 import CalorieRing from "@/components/CalorieRing";
 import CatMascot from "@/components/CatMascot";
+import HistoryPanel from "@/components/HistoryPanel";
 import { MEALS, MealType, QUICK_FOODS } from "@/lib/foods";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { getDeviceId } from "@/lib/deviceId";
+import {
+  addDays,
+  fullLabel,
+  isToday,
+  todayKey,
+} from "@/lib/date";
+import {
+  addEntry as dbAddEntry,
+  clearDay as dbClearDay,
+  getDayData,
+  getHistory,
+  getLatestGoal,
+  removeEntry as dbRemoveEntry,
+  upsertGoal,
+  type Entry,
+  type HistoryDay,
+} from "@/lib/db";
 
-type Entry = {
-  id: string;
-  name: string;
-  kcal: number;
-  meal: MealType;
-};
-
-const GOAL_KEY = "meocalo:goal";
-const ENTRIES_KEY = "meocalo:entries";
+const DEFAULT_GOAL = 1800;
 
 function newId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -24,76 +36,81 @@ function newId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function todayLabel() {
-  return new Date().toLocaleDateString("vi-VN", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+function errMsg(e: unknown) {
+  return e instanceof Error ? e.message : "Có lỗi xảy ra, thử lại nhé.";
 }
 
 export default function Page() {
+  const [deviceId, setDeviceId] = useState("");
+  const [selectedDate, setSelectedDate] = useState(todayKey());
+
   const [loaded, setLoaded] = useState(false);
-  const [goal, setGoal] = useState(1800);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const [goal, setGoal] = useState(DEFAULT_GOAL);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [history, setHistory] = useState<HistoryDay[]>([]);
 
   const [name, setName] = useState("");
   const [kcal, setKcal] = useState("");
   const [meal, setMeal] = useState<MealType>("breakfast");
-
   const [showCalc, setShowCalc] = useState(false);
 
-  // Nạp dữ liệu đã lưu
+  const goalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Lấy mã thiết bị sau khi mount (chỉ có ở phía client).
   useEffect(() => {
-    try {
-      const g = localStorage.getItem(GOAL_KEY);
-      const e = localStorage.getItem(ENTRIES_KEY);
-      if (g) setGoal(Number(g) || 1800);
-      if (e) setEntries(JSON.parse(e));
-    } catch {
-      /* bỏ qua */
-    }
-    setLoaded(true);
+    setDeviceId(getDeviceId());
   }, []);
 
-  // Lưu lại mỗi khi thay đổi
+  // Nạp lại toàn bộ dữ liệu mỗi khi đổi thiết bị hoặc đổi ngày.
   useEffect(() => {
-    if (!loaded) return;
-    try {
-      localStorage.setItem(GOAL_KEY, String(goal));
-      localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
-    } catch {
-      /* bỏ qua */
+    if (!deviceId) return;
+    if (!isSupabaseConfigured) {
+      setLoaded(true);
+      return;
     }
-  }, [goal, entries, loaded]);
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const data = await getDayData(deviceId, selectedDate);
+        let g = data.goal;
+        if (g == null) g = (await getLatestGoal(deviceId)) ?? DEFAULT_GOAL;
+        const hist = await getHistory(deviceId, 7);
+        if (cancelled) return;
+        setGoal(g);
+        setEntries(data.entries);
+        setHistory(hist);
+        setErr(null);
+      } catch (e) {
+        if (!cancelled) setErr(errMsg(e));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setLoaded(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceId, selectedDate]);
+
+  const refreshHistory = useCallback(async () => {
+    if (!isSupabaseConfigured || !deviceId) return;
+    try {
+      setHistory(await getHistory(deviceId, 7));
+    } catch {
+      /* lịch sử không quan trọng bằng thao tác chính, bỏ qua lỗi */
+    }
+  }, [deviceId]);
 
   const consumed = useMemo(
     () => entries.reduce((sum, e) => sum + e.kcal, 0),
     [entries]
   );
-
-  function addEntry(n: string, k: number, m: MealType) {
-    const kk = Math.round(k);
-    if (!n.trim() || !kk || kk <= 0) return;
-    setEntries((prev) => [
-      ...prev,
-      { id: newId(), name: n.trim(), kcal: kk, meal: m },
-    ]);
-  }
-
-  function handleAdd() {
-    addEntry(name, Number(kcal), meal);
-    setName("");
-    setKcal("");
-  }
-
-  function removeEntry(id: string) {
-    setEntries((prev) => prev.filter((e) => e.id !== id));
-  }
-
-  function clearAll() {
-    setEntries([]);
-  }
 
   const grouped = useMemo(() => {
     const map: Record<MealType, Entry[]> = {
@@ -106,10 +123,76 @@ export default function Page() {
     return map;
   }, [entries]);
 
+  async function addEntry(n: string, k: number, m: MealType) {
+    const kk = Math.round(k);
+    if (!n.trim() || !kk || kk <= 0) return;
+    const payload = { name: n.trim(), kcal: kk, meal: m };
+
+    // Chưa cấu hình Supabase: chỉ giữ tạm trong bộ nhớ để xem giao diện.
+    if (!isSupabaseConfigured || !deviceId) {
+      setEntries((prev) => [...prev, { id: newId(), ...payload }]);
+      return;
+    }
+    try {
+      const row = await dbAddEntry(deviceId, selectedDate, payload);
+      setEntries((prev) => [...prev, row]);
+      refreshHistory();
+    } catch (e) {
+      setErr(errMsg(e));
+    }
+  }
+
+  function handleAdd() {
+    addEntry(name, Number(kcal), meal);
+    setName("");
+    setKcal("");
+  }
+
+  async function removeEntry(id: string) {
+    const prev = entries;
+    setEntries((p) => p.filter((e) => e.id !== id));
+    if (!isSupabaseConfigured || !deviceId) return;
+    try {
+      await dbRemoveEntry(id);
+      refreshHistory();
+    } catch (e) {
+      setErr(errMsg(e));
+      setEntries(prev); // hoàn tác nếu xoá thất bại
+    }
+  }
+
+  async function clearAll() {
+    const prev = entries;
+    setEntries([]);
+    if (!isSupabaseConfigured || !deviceId) return;
+    try {
+      await dbClearDay(deviceId, selectedDate);
+      refreshHistory();
+    } catch (e) {
+      setErr(errMsg(e));
+      setEntries(prev);
+    }
+  }
+
+  // Cập nhật mục tiêu: đổi ngay trên giao diện, lưu Supabase sau 600ms.
+  function commitGoal(v: number) {
+    setGoal(v);
+    if (!isSupabaseConfigured || !deviceId) return;
+    if (goalTimer.current) clearTimeout(goalTimer.current);
+    const date = selectedDate;
+    goalTimer.current = setTimeout(() => {
+      upsertGoal(deviceId, date, v)
+        .then(refreshHistory)
+        .catch((e) => setErr(errMsg(e)));
+    }, 600);
+  }
+
+  const canGoNext = !isToday(selectedDate);
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:py-10">
       {/* Tiêu đề */}
-      <header className="mb-8 flex flex-col items-center text-center">
+      <header className="mb-6 flex flex-col items-center text-center">
         <div className="flex items-center gap-3">
           <CatMascot mood="happy" size={64} className="animate-floaty" />
           <h1 className="font-display text-4xl font-bold text-plum sm:text-5xl">
@@ -119,12 +202,71 @@ export default function Page() {
         <p className="mt-2 text-sm font-semibold text-plum-soft sm:text-base">
           Ghi lại calo mỗi ngày cùng bé mèo dễ thương 🐾
         </p>
-        <p className="mt-1 text-xs capitalize text-plum-soft/80">
-          {todayLabel()}
-        </p>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* Điều hướng ngày */}
+      <div className="mb-6 flex items-center justify-center gap-2">
+        <Button
+          isIconOnly
+          variant="ghost"
+          aria-label="Ngày trước"
+          onPress={() => setSelectedDate((d) => addDays(d, -1))}
+          className="rounded-full text-plum hover:bg-rose-tint"
+        >
+          ‹
+        </Button>
+        <div className="min-w-[220px] text-center">
+          <div className="font-display font-bold capitalize text-plum">
+            {fullLabel(selectedDate)}
+          </div>
+          {!isToday(selectedDate) && (
+            <button
+              type="button"
+              onClick={() => setSelectedDate(todayKey())}
+              className="text-xs font-semibold text-rose hover:text-rose-deep"
+            >
+              ↩ Về hôm nay
+            </button>
+          )}
+        </div>
+        <Button
+          isIconOnly
+          variant="ghost"
+          aria-label="Ngày sau"
+          isDisabled={!canGoNext}
+          onPress={() => canGoNext && setSelectedDate((d) => addDays(d, 1))}
+          className="rounded-full text-plum hover:bg-rose-tint disabled:opacity-30"
+        >
+          ›
+        </Button>
+      </div>
+
+      {/* Cảnh báo chưa cấu hình / lỗi */}
+      {!isSupabaseConfigured && (
+        <div className="mb-6 rounded-2xl border border-butter bg-butter/40 px-4 py-3 text-sm text-plum">
+          ⚠️ Chưa cấu hình Supabase. Điền{" "}
+          <code className="font-mono text-rose-deep">
+            NEXT_PUBLIC_SUPABASE_URL
+          </code>{" "}
+          và{" "}
+          <code className="font-mono text-rose-deep">
+            NEXT_PUBLIC_SUPABASE_ANON_KEY
+          </code>{" "}
+          trong <code className="font-mono">.env.local</code> để lưu lại dữ liệu.
+          Hiện tại app chạy tạm, dữ liệu <b>không được lưu</b>.
+        </div>
+      )}
+      {err && (
+        <div className="mb-6 rounded-2xl border border-rose-soft bg-rose-tint px-4 py-3 text-sm text-rose-deep">
+          😿 {err}
+        </div>
+      )}
+
+      <div
+        className={`grid gap-6 transition-opacity lg:grid-cols-3 ${
+          loading ? "opacity-60" : "opacity-100"
+        }`}
+      >
         {/* Cột trái: nhập món + nhật ký */}
         <div className="space-y-6 lg:col-span-2">
           {/* Thêm món */}
@@ -210,9 +352,7 @@ export default function Page() {
                   >
                     <span className="mr-1">{f.emoji}</span>
                     {f.name}
-                    <span className="ml-1 text-xs text-plum-soft">
-                      {f.kcal}
-                    </span>
+                    <span className="ml-1 text-xs text-plum-soft">{f.kcal}</span>
                   </Button>
                 ))}
               </div>
@@ -223,7 +363,7 @@ export default function Page() {
           <Card className="border border-rose-soft/60 bg-cream shadow-sm">
             <Card.Header className="flex items-center justify-between">
               <Card.Title className="font-display text-lg font-bold text-plum">
-                Nhật ký hôm nay 📖
+                Nhật ký {isToday(selectedDate) ? "hôm nay" : "ngày này"} 📖
               </Card.Title>
               {entries.length > 0 && (
                 <Button
@@ -244,7 +384,7 @@ export default function Page() {
                     Bé mèo đang đói bụng!
                   </p>
                   <p className="text-sm text-plum-soft">
-                    Thêm món đầu tiên của bạn ở phía trên nhé.
+                    Thêm món đầu tiên của ngày ở phía trên nhé.
                   </p>
                 </div>
               ) : (
@@ -304,7 +444,7 @@ export default function Page() {
           </Card>
         </div>
 
-        {/* Cột phải: vòng calo + mục tiêu */}
+        {/* Cột phải: vòng calo + mục tiêu + lịch sử */}
         <div className="lg:col-span-1">
           <div className="space-y-6 lg:sticky lg:top-6">
             <Card className="border border-rose-soft/60 bg-cream shadow-sm">
@@ -322,7 +462,7 @@ export default function Page() {
                   </div>
                   <div className="rounded-2xl bg-mint/50 px-3 py-2 text-center">
                     <div className="font-display text-xl font-bold text-plum">
-                      {Math.max(0, Math.round(((consumed / goal) * 100) || 0))}%
+                      {Math.max(0, Math.round((consumed / goal) * 100 || 0))}%
                     </div>
                     <div className="text-xs font-semibold text-plum-soft">
                       mục tiêu
@@ -346,7 +486,7 @@ export default function Page() {
                     type="number"
                     inputMode="numeric"
                     value={String(goal)}
-                    onChange={(e) => setGoal(Number(e.target.value) || 0)}
+                    onChange={(e) => commitGoal(Number(e.target.value) || 0)}
                     className="flex-1"
                   />
                   <span className="text-sm font-semibold text-plum-soft">
@@ -364,16 +504,43 @@ export default function Page() {
                   {showCalc ? "Ẩn gợi ý" : "Gợi ý theo cơ thể 🧮"}
                 </Button>
 
-                {showCalc && <GoalCalculator onApply={(v) => setGoal(v)} />}
+                {showCalc && <GoalCalculator onApply={(v) => commitGoal(v)} />}
               </Card.Content>
             </Card>
+
+            {/* Lịch sử 7 ngày */}
+            {isSupabaseConfigured && (
+              <Card className="border border-rose-soft/60 bg-cream shadow-sm">
+                <Card.Header>
+                  <Card.Title className="font-display text-lg font-bold text-plum">
+                    Lịch sử 7 ngày 📅
+                  </Card.Title>
+                  <Card.Description className="text-plum-soft">
+                    Bấm một ngày để xem lại nhật ký
+                  </Card.Description>
+                </Card.Header>
+                <Card.Content>
+                  {history.length === 0 ? (
+                    <p className="py-4 text-center text-sm text-plum-soft">
+                      Chưa có dữ liệu lịch sử.
+                    </p>
+                  ) : (
+                    <HistoryPanel
+                      history={history}
+                      selectedDate={selectedDate}
+                      onSelect={setSelectedDate}
+                      fallbackGoal={goal || DEFAULT_GOAL}
+                    />
+                  )}
+                </Card.Content>
+              </Card>
+            )}
           </div>
         </div>
       </div>
 
       <footer className="mt-10 text-center text-xs text-plum-soft/70">
-        MèoCalo 🐱 · Dữ liệu được lưu ngay trên máy bạn · Calo chỉ mang tính
-        tham khảo
+        MèoCalo 🐱 · Dữ liệu lưu trên Supabase · Calo chỉ mang tính tham khảo
       </footer>
     </main>
   );
@@ -381,6 +548,7 @@ export default function Page() {
 
 /* ---- Bộ tính gợi ý calo (Mifflin–St Jeor) ---- */
 function GoalCalculator({ onApply }: { onApply: (v: number) => void }) {
+  const [sex, setSex] = useState<"female" | "male">("female");
   const [age, setAge] = useState("25");
   const [weight, setWeight] = useState("55");
   const [height, setHeight] = useState("160");
@@ -398,13 +566,37 @@ function GoalCalculator({ onApply }: { onApply: (v: number) => void }) {
     const w = Number(weight);
     const h = Number(height);
     if (!a || !w || !h) return 0;
-    // Công thức cho nữ
-    const bmr = 10 * w + 6.25 * h - 5 * a - 161;
+    // Mifflin–St Jeor: nam +5, nữ -161
+    const bmr = 10 * w + 6.25 * h - 5 * a + (sex === "male" ? 5 : -161);
     return Math.round((bmr * activity) / 10) * 10;
-  }, [age, weight, height, activity]);
+  }, [sex, age, weight, height, activity]);
 
   return (
     <div className="animate-pop-in space-y-3 rounded-2xl bg-blush p-3">
+      {/* Giới tính */}
+      <div className="flex gap-1.5">
+        {(
+          [
+            { id: "female", label: "Nữ 👧" },
+            { id: "male", label: "Nam 👦" },
+          ] as const
+        ).map((s) => (
+          <Button
+            key={s.id}
+            size="sm"
+            variant={sex === s.id ? "primary" : "outline"}
+            onPress={() => setSex(s.id)}
+            className={
+              sex === s.id
+                ? "flex-1 rounded-full"
+                : "flex-1 rounded-full border-rose-soft text-plum-soft"
+            }
+          >
+            {s.label}
+          </Button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-3 gap-2">
         <LabeledInput label="Tuổi" value={age} onChange={setAge} />
         <LabeledInput label="Cân (kg)" value={weight} onChange={setWeight} />

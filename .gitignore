@@ -2,5 +2,10 @@
 /.next
 /out
 next-env.d.ts
+*.tsbuildinfo
 .DS_Store
 *.log
+
+# Biến môi trường (chứa khóa Supabase — không commit)
+.env
+.env*.local
