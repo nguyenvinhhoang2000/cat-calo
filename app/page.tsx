@@ -6,6 +6,7 @@ import { Button, Card, Chip, Input } from "@heroui/react";
 import CalorieRing from "@/components/CalorieRing";
 import CatMascot from "@/components/CatMascot";
 import HistoryPanel from "@/components/HistoryPanel";
+import StreakCalendar from "@/components/StreakCalendar";
 import { MEALS, MealType } from "@/lib/foods";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { getDeviceId } from "@/lib/deviceId";
@@ -91,7 +92,7 @@ export default function Page() {
         let g = data.goal;
         if (g == null) g = (await getLatestGoal(deviceId)) ?? DEFAULT_GOAL;
         const [hist, strk] = await Promise.all([
-          getHistory(deviceId, 7),
+          getHistory(deviceId, 30),
           getStreak(deviceId),
         ]);
         if (cancelled) return;
@@ -120,7 +121,7 @@ export default function Page() {
     if (!isSupabaseConfigured || !deviceId) return;
     try {
       const [hist, strk] = await Promise.all([
-        getHistory(deviceId, 7),
+        getHistory(deviceId, 30),
         getStreak(deviceId),
       ]);
       setHistory(hist);
@@ -601,19 +602,6 @@ export default function Page() {
                     <span className="text-rose">{net} kcal</span> hiệu dụng
                   </p>
                 )}
-
-                {/* Streak */}
-                <div className="mt-4 w-full rounded-2xl bg-butter/50 px-3 py-2.5 text-center">
-                  {streak > 0 ? (
-                    <span className="font-display text-sm font-bold text-plum">
-                      🔥 Chuỗi {streak} ngày đạt mục tiêu!
-                    </span>
-                  ) : (
-                    <span className="text-xs font-semibold text-plum-soft">
-                      Ăn trong mục tiêu hôm nay để bắt đầu chuỗi 🔥
-                    </span>
-                  )}
-                </div>
               </Card.Content>
             </Card>
 
@@ -680,9 +668,32 @@ export default function Page() {
               </Card.Content>
             </Card>
 
-            {/* Lịch sử 7 ngày */}
+            {/* Lịch streak 30 ngày */}
             {isSupabaseConfigured && (
               <Card className="order-6 border border-rose-soft/60 bg-cream shadow-sm">
+                <Card.Header>
+                  <Card.Title className="font-display text-lg font-bold text-plum">
+                    Chuỗi ngày đạt mục tiêu 🔥
+                  </Card.Title>
+                  <Card.Description className="text-plum-soft">
+                    Lịch 30 ngày · bấm một ngày để xem lại
+                  </Card.Description>
+                </Card.Header>
+                <Card.Content>
+                  <StreakCalendar
+                    days={history}
+                    streak={streak}
+                    selectedDate={selectedDate}
+                    onSelect={setSelectedDate}
+                    fallbackGoal={goal || DEFAULT_GOAL}
+                  />
+                </Card.Content>
+              </Card>
+            )}
+
+            {/* Lịch sử 7 ngày */}
+            {isSupabaseConfigured && (
+              <Card className="order-7 border border-rose-soft/60 bg-cream shadow-sm">
                 <Card.Header>
                   <Card.Title className="font-display text-lg font-bold text-plum">
                     Lịch sử 7 ngày 📅
@@ -698,7 +709,7 @@ export default function Page() {
                     </p>
                   ) : (
                     <HistoryPanel
-                      history={history}
+                      history={history.slice(-7)}
                       selectedDate={selectedDate}
                       onSelect={setSelectedDate}
                       fallbackGoal={goal || DEFAULT_GOAL}
