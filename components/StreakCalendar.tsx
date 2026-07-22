@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useMemo } from "react";
+import CatMascot from "@/components/CatMascot";
 import type { HistoryDay } from "@/lib/db";
 import { isToday } from "@/lib/date";
 
@@ -13,29 +14,6 @@ function weekdayMonFirst(key: string) {
 
 function dayNum(key: string) {
   return Number(key.split("-")[2]);
-}
-
-// Icon mèo hồng nhỏ, dùng làm dấu "đạt". Màu lấy theo currentColor.
-function PinkCat({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      {/* Tai */}
-      <path d="M5 10 L7 3 L11 9 Z" />
-      <path d="M19 10 L17 3 L13 9 Z" />
-      {/* Đầu */}
-      <circle cx="12" cy="14" r="7.2" />
-      {/* Mắt */}
-      <circle cx="9.4" cy="13.4" r="1.05" fill="#fff" />
-      <circle cx="14.6" cy="13.4" r="1.05" fill="#fff" />
-      {/* Mũi */}
-      <path d="M11 16 L13 16 L12 17.2 Z" fill="#fff" />
-    </svg>
-  );
 }
 
 /**
@@ -124,7 +102,7 @@ export function StreakCalendar({
               }`}
             >
               {ok ? (
-                <PinkCat className="h-[70%] w-[70%] text-rose" />
+                <CatMascot mood="hungry" size={32} />
               ) : (
                 <span className="text-[11px] font-bold text-plum-soft/50">
                   {dayNum(d.date)}
@@ -138,7 +116,7 @@ export function StreakCalendar({
       {/* Chú thích */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-plum-soft">
         <span className="flex items-center gap-1">
-          <PinkCat className="h-3.5 w-3.5 text-rose" />
+          <CatMascot mood="hungry" size={18} />
           Đạt mục tiêu
         </span>
         <span className="flex items-center gap-1">
