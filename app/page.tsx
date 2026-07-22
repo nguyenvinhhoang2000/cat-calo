@@ -6,7 +6,7 @@ import { Button, Card, Chip, Input } from "@heroui/react";
 import CalorieRing from "@/components/CalorieRing";
 import CatMascot from "@/components/CatMascot";
 import HistoryPanel from "@/components/HistoryPanel";
-import { MEALS, MealType, QUICK_FOODS, QUICK_WORKOUTS } from "@/lib/foods";
+import { MEALS, MealType } from "@/lib/foods";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { getDeviceId } from "@/lib/deviceId";
 import {
@@ -408,35 +408,6 @@ export default function Page() {
             </Card.Content>
           </Card>
 
-          {/* Thêm nhanh */}
-          <Card className="order-4 border border-rose-soft/60 bg-cream shadow-sm">
-            <Card.Header>
-              <Card.Title className="font-display text-lg font-bold text-plum">
-                Thêm nhanh 💕
-              </Card.Title>
-              <Card.Description className="text-plum-soft">
-                Chạm để thêm ngay (calo tham khảo mỗi phần)
-              </Card.Description>
-            </Card.Header>
-            <Card.Content>
-              <div className="flex flex-wrap gap-2">
-                {QUICK_FOODS.map((f) => (
-                  <Button
-                    key={f.name}
-                    size="sm"
-                    variant="ghost"
-                    onPress={() => addEntry(f.name, f.kcal, f.meal)}
-                    className="rounded-full bg-rose-tint text-plum hover:bg-rose-soft"
-                  >
-                    <span className="mr-1">{f.emoji}</span>
-                    {f.name}
-                    <span className="ml-1 text-xs text-plum-soft">{f.kcal}</span>
-                  </Button>
-                ))}
-              </div>
-            </Card.Content>
-          </Card>
-
           {/* Nhật ký theo bữa */}
           <Card className="order-2 border border-rose-soft/60 bg-cream shadow-sm">
             <Card.Header className="flex items-center justify-between">
@@ -522,7 +493,7 @@ export default function Page() {
           </Card>
 
           {/* Tập luyện */}
-          <Card className="order-5 border border-rose-soft/60 bg-cream shadow-sm">
+          <Card className="order-4 border border-rose-soft/60 bg-cream shadow-sm">
             <Card.Header className="flex items-center justify-between">
               <Card.Title className="font-display text-lg font-bold text-plum">
                 Hôm nay bạn tập luyện gì nào? 🏃
@@ -568,23 +539,6 @@ export default function Page() {
               >
                 Thêm bài tập 💪
               </Button>
-
-              {/* Bài tập nhanh */}
-              <div className="flex flex-wrap gap-2">
-                {QUICK_WORKOUTS.map((w) => (
-                  <Button
-                    key={w.name}
-                    size="sm"
-                    variant="ghost"
-                    onPress={() => addWorkout(w.name, w.kcal)}
-                    className="rounded-full bg-mint/40 text-plum hover:bg-mint/70"
-                  >
-                    <span className="mr-1">{w.emoji}</span>
-                    {w.name}
-                    <span className="ml-1 text-xs text-plum-soft">{w.kcal}</span>
-                  </Button>
-                ))}
-              </div>
 
               {/* Danh sách bài tập hôm nay */}
               {workouts.length > 0 && (
@@ -664,7 +618,7 @@ export default function Page() {
             </Card>
 
             {/* Mục tiêu */}
-            <Card className="order-6 border border-rose-soft/60 bg-cream shadow-sm">
+            <Card className="order-5 border border-rose-soft/60 bg-cream shadow-sm">
               <Card.Header>
                 <Card.Title className="font-display text-lg font-bold text-plum">
                   {isToday(selectedDate) ? "Mục tiêu hôm nay" : "Mục tiêu ngày này"} 🎯
@@ -728,7 +682,7 @@ export default function Page() {
 
             {/* Lịch sử 7 ngày */}
             {isSupabaseConfigured && (
-              <Card className="order-7 border border-rose-soft/60 bg-cream shadow-sm">
+              <Card className="order-6 border border-rose-soft/60 bg-cream shadow-sm">
                 <Card.Header>
                   <Card.Title className="font-display text-lg font-bold text-plum">
                     Lịch sử 7 ngày 📅
