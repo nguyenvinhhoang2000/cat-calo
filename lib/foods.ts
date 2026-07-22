@@ -38,3 +38,21 @@ export const QUICK_FOODS: QuickFood[] = [
   { name: "Bánh quy (3 cái)", kcal: 160, emoji: "🍪", meal: "snack" },
   { name: "Cà phê sữa", kcal: 120, emoji: "☕", meal: "snack" },
 ];
+
+export type QuickWorkout = {
+  name: string;
+  kcal: number; // calo tiêu hao tham khảo cho ~30 phút
+  emoji: string;
+};
+
+// Calo tiêu hao mang tính tham khảo (khoảng 30 phút, người ~55kg)
+export const QUICK_WORKOUTS: QuickWorkout[] = [
+  { name: "Đi bộ", kcal: 120, emoji: "🚶" },
+  { name: "Chạy bộ", kcal: 300, emoji: "🏃" },
+  { name: "Đạp xe", kcal: 250, emoji: "🚴" },
+  { name: "Yoga", kcal: 150, emoji: "🧘" },
+  { name: "Gym / tạ", kcal: 200, emoji: "🏋️" },
+  { name: "Bơi lội", kcal: 330, emoji: "🏊" },
+  { name: "Nhảy dây", kcal: 300, emoji: "🤸" },
+  { name: "Cầu lông", kcal: 240, emoji: "🏸" },
+];

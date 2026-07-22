@@ -6,7 +6,7 @@ import { Button, Card, Chip, Input } from "@heroui/react";
 import CalorieRing from "@/components/CalorieRing";
 import CatMascot from "@/components/CatMascot";
 import HistoryPanel from "@/components/HistoryPanel";
-import { MEALS, MealType, QUICK_FOODS } from "@/lib/foods";
+import { MEALS, MealType, QUICK_FOODS, QUICK_WORKOUTS } from "@/lib/foods";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { getDeviceId } from "@/lib/deviceId";
 import {
@@ -17,14 +17,18 @@ import {
 } from "@/lib/date";
 import {
   addEntry as dbAddEntry,
+  addWorkout as dbAddWorkout,
   clearDay as dbClearDay,
   getDayData,
   getHistory,
   getLatestGoal,
+  getStreak,
   removeEntry as dbRemoveEntry,
+  removeWorkout as dbRemoveWorkout,
   upsertGoal,
   type Entry,
   type HistoryDay,
+  type Workout,
 } from "@/lib/db";
 
 const DEFAULT_GOAL = 1800;
@@ -55,12 +59,17 @@ export default function Page() {
   const [savedGoal, setSavedGoal] = useState<number | null>(null);
   const [savingGoal, setSavingGoal] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [history, setHistory] = useState<HistoryDay[]>([]);
+  const [streak, setStreak] = useState(0);
 
   const [name, setName] = useState("");
   const [kcal, setKcal] = useState("");
   const [meal, setMeal] = useState<MealType>("breakfast");
   const [showCalc, setShowCalc] = useState(false);
+
+  const [woName, setWoName] = useState("");
+  const [woKcal, setWoKcal] = useState("");
 
   // Lấy mã thiết bị sau khi mount (chỉ có ở phía client).
   useEffect(() => {
@@ -81,12 +90,17 @@ export default function Page() {
         const data = await getDayData(deviceId, selectedDate);
         let g = data.goal;
         if (g == null) g = (await getLatestGoal(deviceId)) ?? DEFAULT_GOAL;
-        const hist = await getHistory(deviceId, 7);
+        const [hist, strk] = await Promise.all([
+          getHistory(deviceId, 7),
+          getStreak(deviceId),
+        ]);
         if (cancelled) return;
         setGoal(g);
         setSavedGoal(data.goal); // giá trị đã lưu thật cho ngày này (có thể null)
         setEntries(data.entries);
+        setWorkouts(data.workouts);
         setHistory(hist);
+        setStreak(strk);
         setErr(null);
       } catch (e) {
         if (!cancelled) setErr(errMsg(e));
@@ -102,12 +116,17 @@ export default function Page() {
     };
   }, [deviceId, selectedDate]);
 
-  const refreshHistory = useCallback(async () => {
+  const refreshStats = useCallback(async () => {
     if (!isSupabaseConfigured || !deviceId) return;
     try {
-      setHistory(await getHistory(deviceId, 7));
+      const [hist, strk] = await Promise.all([
+        getHistory(deviceId, 7),
+        getStreak(deviceId),
+      ]);
+      setHistory(hist);
+      setStreak(strk);
     } catch {
-      /* lịch sử không quan trọng bằng thao tác chính, bỏ qua lỗi */
+      /* lịch sử/streak không quan trọng bằng thao tác chính, bỏ qua lỗi */
     }
   }, [deviceId]);
 
@@ -115,6 +134,14 @@ export default function Page() {
     () => entries.reduce((sum, e) => sum + e.kcal, 0),
     [entries]
   );
+
+  const burned = useMemo(
+    () => workouts.reduce((sum, w) => sum + w.kcal, 0),
+    [workouts]
+  );
+
+  // Calo hiệu dụng = đã ăn − đã đốt (dùng cho vòng tròn & streak).
+  const net = consumed - burned;
 
   const grouped = useMemo(() => {
     const map: Record<MealType, Entry[]> = {
@@ -140,7 +167,7 @@ export default function Page() {
     try {
       const row = await dbAddEntry(deviceId, selectedDate, payload);
       setEntries((prev) => [...prev, row]);
-      refreshHistory();
+      refreshStats();
     } catch (e) {
       setErr(errMsg(e));
     }
@@ -158,7 +185,7 @@ export default function Page() {
     if (!isSupabaseConfigured || !deviceId) return;
     try {
       await dbRemoveEntry(id);
-      refreshHistory();
+      refreshStats();
     } catch (e) {
       setErr(errMsg(e));
       setEntries(prev); // hoàn tác nếu xoá thất bại
@@ -171,10 +198,47 @@ export default function Page() {
     if (!isSupabaseConfigured || !deviceId) return;
     try {
       await dbClearDay(deviceId, selectedDate);
-      refreshHistory();
+      refreshStats();
     } catch (e) {
       setErr(errMsg(e));
       setEntries(prev);
+    }
+  }
+
+  async function addWorkout(n: string, k: number) {
+    const kk = Math.round(k);
+    if (!n.trim() || !kk || kk <= 0) return;
+    const payload = { name: n.trim(), kcal: kk };
+
+    if (!isSupabaseConfigured || !deviceId) {
+      setWorkouts((prev) => [...prev, { id: newId(), ...payload }]);
+      return;
+    }
+    try {
+      const row = await dbAddWorkout(deviceId, selectedDate, payload);
+      setWorkouts((prev) => [...prev, row]);
+      refreshStats();
+    } catch (e) {
+      setErr(errMsg(e));
+    }
+  }
+
+  function handleAddWorkout() {
+    addWorkout(woName, Number(woKcal));
+    setWoName("");
+    setWoKcal("");
+  }
+
+  async function removeWorkout(id: string) {
+    const prev = workouts;
+    setWorkouts((p) => p.filter((w) => w.id !== id));
+    if (!isSupabaseConfigured || !deviceId) return;
+    try {
+      await dbRemoveWorkout(id);
+      refreshStats();
+    } catch (e) {
+      setErr(errMsg(e));
+      setWorkouts(prev); // hoàn tác nếu xoá thất bại
     }
   }
 
@@ -190,7 +254,7 @@ export default function Page() {
       await upsertGoal(deviceId, selectedDate, value);
       setSavedGoal(value);
       setErr(null);
-      refreshHistory();
+      refreshStats();
     } catch (e) {
       setErr(errMsg(e));
     } finally {
@@ -456,46 +520,163 @@ export default function Page() {
               )}
             </Card.Content>
           </Card>
+
+          {/* Tập luyện */}
+          <Card className="order-5 border border-rose-soft/60 bg-cream shadow-sm">
+            <Card.Header className="flex items-center justify-between">
+              <Card.Title className="font-display text-lg font-bold text-plum">
+                Hôm nay bạn tập luyện gì nào? 🏃
+              </Card.Title>
+              {burned > 0 && (
+                <Chip
+                  size="sm"
+                  variant="soft"
+                  className="bg-mint/60 font-semibold text-plum"
+                >
+                  🔥 {burned} kcal
+                </Chip>
+              )}
+            </Card.Header>
+            <Card.Content className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Input
+                  aria-label="Tên bài tập"
+                  placeholder="Bài tập (vd: Chạy bộ 30')"
+                  value={woName}
+                  onChange={(e) => setWoName(e.target.value)}
+                  className="flex-1"
+                />
+                <Input
+                  aria-label="Calo đã tiêu hao"
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="kcal đốt"
+                  value={woKcal}
+                  onChange={(e) => setWoKcal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddWorkout();
+                  }}
+                  className="sm:w-32"
+                />
+              </div>
+
+              <Button
+                variant="primary"
+                fullWidth
+                onPress={handleAddWorkout}
+                className="rounded-full font-bold"
+              >
+                Thêm bài tập 💪
+              </Button>
+
+              {/* Bài tập nhanh */}
+              <div className="flex flex-wrap gap-2">
+                {QUICK_WORKOUTS.map((w) => (
+                  <Button
+                    key={w.name}
+                    size="sm"
+                    variant="ghost"
+                    onPress={() => addWorkout(w.name, w.kcal)}
+                    className="rounded-full bg-mint/40 text-plum hover:bg-mint/70"
+                  >
+                    <span className="mr-1">{w.emoji}</span>
+                    {w.name}
+                    <span className="ml-1 text-xs text-plum-soft">{w.kcal}</span>
+                  </Button>
+                ))}
+              </div>
+
+              {/* Danh sách bài tập hôm nay */}
+              {workouts.length > 0 && (
+                <ul className="space-y-2 border-t border-rose-soft/40 pt-3">
+                  {workouts.map((w) => (
+                    <li
+                      key={w.id}
+                      className="animate-pop-in flex items-center justify-between rounded-2xl bg-blush px-4 py-2.5"
+                    >
+                      <span className="font-semibold text-plum">{w.name}</span>
+                      <span className="flex items-center gap-3">
+                        <span className="font-bold text-plum">−{w.kcal}</span>
+                        <Button
+                          isIconOnly
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`Xoá ${w.name}`}
+                          onPress={() => removeWorkout(w.id)}
+                          className="text-plum-soft hover:text-rose-deep"
+                        >
+                          ✕
+                        </Button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card.Content>
+          </Card>
         </div>
 
         {/* Cột phụ: vòng calo + mục tiêu + lịch sử */}
         <div className="contents lg:flex lg:flex-col lg:gap-6 lg:col-span-1 lg:sticky lg:top-6 lg:self-start">
             <Card className="order-1 border border-rose-soft/60 bg-cream shadow-sm">
               <Card.Content className="flex flex-col items-center pt-6">
-                <CalorieRing consumed={consumed} goal={goal} />
+                <CalorieRing consumed={net} goal={goal} />
 
                 <div className="mt-5 grid w-full grid-cols-2 gap-3">
                   <div className="rounded-2xl bg-rose-tint px-3 py-2 text-center">
                     <div className="font-display text-xl font-bold text-rose">
-                      {entries.length}
+                      {consumed}
                     </div>
                     <div className="text-xs font-semibold text-plum-soft">
-                      món đã ăn
+                      đã ăn 🍽️
                     </div>
                   </div>
                   <div className="rounded-2xl bg-mint/50 px-3 py-2 text-center">
                     <div className="font-display text-xl font-bold text-plum">
-                      {Math.max(0, Math.round((consumed / goal) * 100 || 0))}%
+                      {burned}
                     </div>
                     <div className="text-xs font-semibold text-plum-soft">
-                      mục tiêu
+                      đã đốt 🔥
                     </div>
                   </div>
+                </div>
+
+                {burned > 0 && (
+                  <p className="mt-3 text-center text-xs font-semibold text-plum-soft">
+                    Đã ăn {consumed} − đốt {burned} ={" "}
+                    <span className="text-rose">{net} kcal</span> hiệu dụng
+                  </p>
+                )}
+
+                {/* Streak */}
+                <div className="mt-4 w-full rounded-2xl bg-butter/50 px-3 py-2.5 text-center">
+                  {streak > 0 ? (
+                    <span className="font-display text-sm font-bold text-plum">
+                      🔥 Chuỗi {streak} ngày đạt mục tiêu!
+                    </span>
+                  ) : (
+                    <span className="text-xs font-semibold text-plum-soft">
+                      Ăn trong mục tiêu hôm nay để bắt đầu chuỗi 🔥
+                    </span>
+                  )}
                 </div>
               </Card.Content>
             </Card>
 
             {/* Mục tiêu */}
-            <Card className="order-5 border border-rose-soft/60 bg-cream shadow-sm">
+            <Card className="order-6 border border-rose-soft/60 bg-cream shadow-sm">
               <Card.Header>
                 <Card.Title className="font-display text-lg font-bold text-plum">
-                  Mục tiêu mỗi ngày 🎯
+                  {isToday(selectedDate) ? "Mục tiêu hôm nay" : "Mục tiêu ngày này"} 🎯
                 </Card.Title>
+                <Card.Description className="text-plum-soft">
+                  Tự nhập cho từng ngày — mỗi ngày một mức tuỳ ý
+                </Card.Description>
               </Card.Header>
               <Card.Content className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Input
-                    aria-label="Mục tiêu calo mỗi ngày"
+                    aria-label="Mục tiêu calo hôm nay"
                     type="number"
                     inputMode="numeric"
                     value={String(goal)}
@@ -547,7 +728,7 @@ export default function Page() {
 
             {/* Lịch sử 7 ngày */}
             {isSupabaseConfigured && (
-              <Card className="order-6 border border-rose-soft/60 bg-cream shadow-sm">
+              <Card className="order-7 border border-rose-soft/60 bg-cream shadow-sm">
                 <Card.Header>
                   <Card.Title className="font-display text-lg font-bold text-plum">
                     Lịch sử 7 ngày 📅
