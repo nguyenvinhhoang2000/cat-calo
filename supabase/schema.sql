@@ -33,6 +33,19 @@ create table if not exists public.daily_goals (
     primary key (device_id, goal_date)
 );
 
+-- --- Bảng nhật ký tập luyện (calo tiêu hao) --------------------------
+create table if not exists public.workouts (
+    id          uuid primary key default gen_random_uuid(),
+    device_id   text        not null,
+    entry_date  date        not null,
+    name        text        not null,
+    kcal        integer     not null check (kcal > 0),
+    created_at  timestamptz not null default now()
+);
+
+create index if not exists workouts_device_date_idx
+    on public.workouts (device_id, entry_date, created_at);
+
 -- =====================================================================
 --  Row Level Security
 --  Bật RLS rồi cho phép vai trò anon thao tác. Vì chỉ có anon key ở
@@ -43,10 +56,18 @@ create table if not exists public.daily_goals (
 -- =====================================================================
 alter table public.entries      enable row level security;
 alter table public.daily_goals  enable row level security;
+alter table public.workouts     enable row level security;
 
 drop policy if exists "anon full access - entries" on public.entries;
 create policy "anon full access - entries"
     on public.entries for all
+    to anon
+    using (true)
+    with check (true);
+
+drop policy if exists "anon full access - workouts" on public.workouts;
+create policy "anon full access - workouts"
+    on public.workouts for all
     to anon
     using (true)
     with check (true);
