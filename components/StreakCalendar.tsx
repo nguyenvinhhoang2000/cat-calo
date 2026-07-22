@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useMemo } from "react";
+import CatMascot from "@/components/CatMascot";
 import type { HistoryDay } from "@/lib/db";
 import { isToday } from "@/lib/date";
 
@@ -70,24 +71,20 @@ export function StreakCalendar({
         ))}
         {days.map((d) => {
           const active = isActive(d);
-          const ok = hit(d);
-          const over = active && !ok;
+          const ok = hit(d); // đạt mục tiêu
           const today = isToday(d.date);
           const selected = d.date === selectedDate;
-          const color = ok
-            ? "bg-mint text-plum"
-            : over
-              ? "bg-rose text-white"
-              : "bg-rose-soft/25 text-plum-soft/70";
           return (
             <button
               key={d.date}
               type="button"
               onClick={() => onSelect(d.date)}
               aria-label={
-                active
-                  ? `${d.date}: ${d.net} kcal / mục tiêu ${d.goal ?? fallbackGoal}`
-                  : `${d.date}: chưa ghi`
+                ok
+                  ? `${d.date}: đạt mục tiêu (${d.net}/${d.goal ?? fallbackGoal} kcal)`
+                  : active
+                    ? `${d.date}: chưa đạt (${d.net}/${d.goal ?? fallbackGoal} kcal)`
+                    : `${d.date}: chưa ghi`
               }
               title={
                 active
@@ -96,7 +93,7 @@ export function StreakCalendar({
                     }`
                   : `${d.date}: chưa ghi`
               }
-              className={`flex aspect-square items-center justify-center rounded-lg text-[11px] font-bold transition hover:opacity-80 ${color} ${
+              className={`relative flex aspect-square items-center justify-center rounded-lg border border-rose-soft/40 bg-white transition hover:opacity-80 ${
                 selected
                   ? "ring-2 ring-rose-deep"
                   : today
@@ -104,7 +101,13 @@ export function StreakCalendar({
                     : ""
               }`}
             >
-              {dayNum(d.date)}
+              {ok ? (
+                <CatMascot mood="hungry" size={32} />
+              ) : (
+                <span className="text-[11px] font-bold text-plum-soft/50">
+                  {dayNum(d.date)}
+                </span>
+              )}
             </button>
           );
         })}
@@ -113,16 +116,12 @@ export function StreakCalendar({
       {/* Chú thích */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-plum-soft">
         <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded bg-mint" />
-          Đạt
+          <CatMascot mood="hungry" size={18} />
+          Đạt mục tiêu
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded bg-rose" />
-          Vượt
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded bg-rose-soft/40" />
-          Chưa ghi
+          <span className="inline-block h-3 w-3 rounded border border-rose-soft/60 bg-white" />
+          Chưa đạt
         </span>
       </div>
     </div>
