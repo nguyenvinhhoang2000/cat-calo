@@ -23,6 +23,12 @@ export type DayData = {
   entries: Entry[];
   workouts: Workout[];
   goal: number | null;
+  weight: number | null; // cân nặng (kg) đã ghi cho ngày này, null nếu chưa ghi
+};
+
+export type WeightPoint = {
+  date: string; // khóa "YYYY-MM-DD"
+  kg: number;
 };
 
 export type HistoryDay = {
@@ -54,7 +60,7 @@ function client() {
 export async function getDayData(deviceId: string, date: string): Promise<DayData> {
   const db = client();
 
-  const [entriesRes, workoutsRes, goalRes] = await Promise.all([
+  const [entriesRes, workoutsRes, goalRes, weightRes] = await Promise.all([
     db
       .from("entries")
       .select("id, name, kcal, meal")
@@ -73,16 +79,23 @@ export async function getDayData(deviceId: string, date: string): Promise<DayDat
       .eq("device_id", deviceId)
       .eq("goal_date", date)
       .maybeSingle(),
+    db
+      .from("weights")
+      .select("kg")
+      .eq("device_id", deviceId)
+      .eq("weigh_date", date)
+      .maybeSingle(),
   ]);
 
   if (entriesRes.error) throw entriesRes.error;
   if (goalRes.error) throw goalRes.error;
-  // Bảng workouts có thể chưa tồn tại (chưa chạy migration) → coi như trống.
+  // Bảng workouts / weights có thể chưa tồn tại (chưa chạy migration) → coi như trống.
 
   return {
     entries: (entriesRes.data ?? []) as Entry[],
     workouts: (workoutsRes.error ? [] : workoutsRes.data ?? []) as Workout[],
     goal: goalRes.data ? goalRes.data.goal : null,
+    weight: weightRes.error || !weightRes.data ? null : Number(weightRes.data.kg),
   };
 }
 
@@ -191,6 +204,57 @@ export async function getLatestGoal(deviceId: string): Promise<number | null> {
 
   if (error) throw error;
   return data ? data.goal : null;
+}
+
+// --- Cân nặng theo ngày ------------------------------------------------
+
+/** Đặt (hoặc cập nhật) cân nặng cho một ngày. Mỗi ngày tối đa một số đo. */
+export async function upsertWeight(
+  deviceId: string,
+  date: string,
+  kg: number
+): Promise<void> {
+  const db = client();
+  const { error } = await db.from("weights").upsert(
+    {
+      device_id: deviceId,
+      weigh_date: date,
+      kg,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "device_id,weigh_date" }
+  );
+  if (error) throw error;
+}
+
+/** Xoá cân nặng của một ngày. */
+export async function deleteWeight(deviceId: string, date: string): Promise<void> {
+  const db = client();
+  const { error } = await db
+    .from("weights")
+    .delete()
+    .eq("device_id", deviceId)
+    .eq("weigh_date", date);
+  if (error) throw error;
+}
+
+/**
+ * Lấy toàn bộ chuỗi cân nặng (sắp theo ngày tăng dần) để vẽ biểu đồ & thống kê.
+ * Trả về [] nếu bảng chưa tồn tại (chưa chạy migration) để UI không vỡ.
+ */
+export async function getWeights(deviceId: string): Promise<WeightPoint[]> {
+  const db = client();
+  const { data, error } = await db
+    .from("weights")
+    .select("weigh_date, kg")
+    .eq("device_id", deviceId)
+    .order("weigh_date", { ascending: true });
+
+  if (error) return []; // bảng chưa có → coi như chưa có dữ liệu
+  return (data ?? []).map((r) => ({
+    date: r.weigh_date as string,
+    kg: Number(r.kg),
+  }));
 }
 
 // Gộp calo theo ngày cho một khoảng thời gian. Trả về map date -> tổng kcal.

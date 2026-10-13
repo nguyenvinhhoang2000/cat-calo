@@ -46,6 +46,18 @@ create table if not exists public.workouts (
 create index if not exists workouts_device_date_idx
     on public.workouts (device_id, entry_date, created_at);
 
+-- --- Bảng cân nặng theo ngày -----------------------------------------
+create table if not exists public.weights (
+    device_id   text          not null,
+    weigh_date  date          not null,
+    kg          numeric(5, 1) not null check (kg > 0 and kg <= 500),
+    updated_at  timestamptz   not null default now(),
+    primary key (device_id, weigh_date)
+);
+
+create index if not exists weights_device_date_idx
+    on public.weights (device_id, weigh_date);
+
 -- =====================================================================
 --  Row Level Security
 --  Bật RLS rồi cho phép vai trò anon thao tác. Vì chỉ có anon key ở
@@ -57,6 +69,7 @@ create index if not exists workouts_device_date_idx
 alter table public.entries      enable row level security;
 alter table public.daily_goals  enable row level security;
 alter table public.workouts     enable row level security;
+alter table public.weights      enable row level security;
 
 drop policy if exists "anon full access - entries" on public.entries;
 create policy "anon full access - entries"
@@ -75,6 +88,13 @@ create policy "anon full access - workouts"
 drop policy if exists "anon full access - daily_goals" on public.daily_goals;
 create policy "anon full access - daily_goals"
     on public.daily_goals for all
+    to anon
+    using (true)
+    with check (true);
+
+drop policy if exists "anon full access - weights" on public.weights;
+create policy "anon full access - weights"
+    on public.weights for all
     to anon
     using (true)
     with check (true);

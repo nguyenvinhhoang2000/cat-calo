@@ -7,6 +7,7 @@ import CalorieRing from "@/components/CalorieRing";
 import CatMascot from "@/components/CatMascot";
 import HistoryPanel from "@/components/HistoryPanel";
 import StreakCalendar from "@/components/StreakCalendar";
+import WeightChart from "@/components/WeightChart";
 import { MEALS, MealType } from "@/lib/foods";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { getDeviceId } from "@/lib/deviceId";
@@ -27,8 +28,12 @@ import {
   removeEntry as dbRemoveEntry,
   removeWorkout as dbRemoveWorkout,
   upsertGoal,
+  upsertWeight as dbUpsertWeight,
+  deleteWeight as dbDeleteWeight,
+  getWeights,
   type Entry,
   type HistoryDay,
+  type WeightPoint,
   type Workout,
 } from "@/lib/db";
 
@@ -72,6 +77,12 @@ export default function Page() {
   const [woName, setWoName] = useState("");
   const [woKcal, setWoKcal] = useState("");
 
+  // Cân nặng
+  const [weights, setWeights] = useState<WeightPoint[]>([]);
+  const [weightInput, setWeightInput] = useState("");
+  const [dayWeight, setDayWeight] = useState<number | null>(null);
+  const [savingWeight, setSavingWeight] = useState(false);
+
   // Lấy mã thiết bị sau khi mount (chỉ có ở phía client).
   useEffect(() => {
     setDeviceId(getDeviceId());
@@ -91,9 +102,10 @@ export default function Page() {
         const data = await getDayData(deviceId, selectedDate);
         let g = data.goal;
         if (g == null) g = (await getLatestGoal(deviceId)) ?? DEFAULT_GOAL;
-        const [hist, strk] = await Promise.all([
+        const [hist, strk, wts] = await Promise.all([
           getHistory(deviceId, 30),
           getStreak(deviceId),
+          getWeights(deviceId),
         ]);
         if (cancelled) return;
         setGoal(g);
@@ -102,6 +114,9 @@ export default function Page() {
         setWorkouts(data.workouts);
         setHistory(hist);
         setStreak(strk);
+        setWeights(wts);
+        setDayWeight(data.weight);
+        setWeightInput(data.weight != null ? String(data.weight) : "");
         setErr(null);
       } catch (e) {
         if (!cancelled) setErr(errMsg(e));
@@ -262,6 +277,66 @@ export default function Page() {
       setSavingGoal(false);
     }
   }
+
+  // Lưu cân nặng cho ngày đang xem (mỗi ngày một số đo, lưu lại sẽ ghi đè).
+  async function saveWeight() {
+    const kg = Math.round(parseFloat(weightInput.replace(",", ".")) * 10) / 10;
+    if (!kg || kg <= 0 || kg > 500) return;
+
+    const prev = weights;
+    setWeights((arr) =>
+      [...arr.filter((w) => w.date !== selectedDate), { date: selectedDate, kg }].sort(
+        (a, b) => a.date.localeCompare(b.date)
+      )
+    );
+    setDayWeight(kg);
+
+    if (!isSupabaseConfigured || !deviceId) return;
+    setSavingWeight(true);
+    try {
+      await dbUpsertWeight(deviceId, selectedDate, kg);
+      setErr(null);
+    } catch (e) {
+      setErr(errMsg(e));
+      setWeights(prev); // hoàn tác nếu lưu thất bại
+    } finally {
+      setSavingWeight(false);
+    }
+  }
+
+  async function removeWeight(date: string) {
+    const prev = weights;
+    setWeights((p) => p.filter((w) => w.date !== date));
+    if (date === selectedDate) {
+      setDayWeight(null);
+      setWeightInput("");
+    }
+    if (!isSupabaseConfigured || !deviceId) return;
+    try {
+      await dbDeleteWeight(deviceId, date);
+    } catch (e) {
+      setErr(errMsg(e));
+      setWeights(prev);
+    }
+  }
+
+  // Thống kê cân nặng (chuỗi đã sắp theo ngày tăng dần trong state).
+  const wStats = useMemo(() => {
+    if (weights.length === 0) return null;
+    const first = weights[0];
+    const last = weights[weights.length - 1];
+    const kgs = weights.map((w) => w.kg);
+    return {
+      current: last.kg,
+      change: Math.round((last.kg - first.kg) * 10) / 10,
+      min: Math.min(...kgs),
+      max: Math.max(...kgs),
+    };
+  }, [weights]);
+
+  const parsedWeight = Math.round(parseFloat(weightInput.replace(",", ".")) * 10) / 10;
+  const weightValid = !!parsedWeight && parsedWeight > 0 && parsedWeight <= 500;
+  const weightDirty = weightValid && parsedWeight !== dayWeight;
 
   const canGoNext = !isToday(selectedDate);
   const goalDirty = goal > 0 && goal !== savedGoal;
@@ -721,6 +796,178 @@ export default function Page() {
         </div>
       </div>
 
+      {/* ====== Cân nặng theo ngày ====== */}
+      <section className="mt-6">
+        <Card className="border border-rose-soft/60 bg-cream shadow-sm">
+          <Card.Header>
+            <Card.Title className="font-display text-xl font-bold text-plum">
+              Cân nặng theo ngày ⚖️
+            </Card.Title>
+            <Card.Description className="text-plum-soft">
+              Ghi lại cân nặng để xem bé tiến bộ thế nào 🐾
+            </Card.Description>
+          </Card.Header>
+          <Card.Content className="space-y-5">
+            <div className="grid gap-5 lg:grid-cols-3">
+              {/* Biểu đồ */}
+              <div className="lg:col-span-2">
+                {weights.length === 0 ? (
+                  <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-2 rounded-2xl bg-blush py-8 text-center">
+                    <CatMascot mood="content" size={92} />
+                    <p className="font-semibold text-plum">
+                      Chưa có dữ liệu cân nặng
+                    </p>
+                    <p className="text-sm text-plum-soft">
+                      Nhập cân nặng cho ngày đang xem ở bên cạnh nhé.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl bg-blush p-3">
+                    <WeightChart data={weights} />
+                  </div>
+                )}
+              </div>
+
+              {/* Form nhập cho ngày đang chọn */}
+              <div className="space-y-3">
+                <div className="rounded-2xl bg-rose-tint px-3 py-2 text-center">
+                  <div className="text-xs font-semibold text-plum-soft">
+                    Ghi cho ngày
+                  </div>
+                  <div className="font-display text-sm font-bold capitalize text-plum">
+                    {fullLabel(selectedDate)}
+                  </div>
+                </div>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-plum-soft">
+                    Cân nặng (kg)
+                  </span>
+                  <Input
+                    aria-label="Cân nặng"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    placeholder="vd: 55.5"
+                    value={weightInput}
+                    onChange={(e) => setWeightInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && weightDirty) saveWeight();
+                    }}
+                  />
+                </label>
+                <Button
+                  variant="primary"
+                  fullWidth
+                  isDisabled={!weightDirty || savingWeight}
+                  onPress={saveWeight}
+                  className="rounded-full font-bold disabled:opacity-60"
+                >
+                  {savingWeight
+                    ? "Đang lưu..."
+                    : dayWeight != null && !weightDirty
+                      ? "Đã lưu ✓"
+                      : dayWeight != null
+                        ? "Cập nhật cân nặng 💾"
+                        : "Lưu cân nặng 💾"}
+                </Button>
+                {dayWeight != null && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    fullWidth
+                    onPress={() => removeWeight(selectedDate)}
+                    className="text-plum-soft hover:text-rose-deep"
+                  >
+                    Xoá số đo ngày này
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Thống kê */}
+            {wStats && (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatTile
+                  label="Hiện tại"
+                  value={`${wStats.current.toFixed(1)} kg`}
+                  tone="rose"
+                />
+                <StatTile
+                  label="Thay đổi"
+                  value={`${wStats.change > 0 ? "+" : ""}${wStats.change.toFixed(1)} kg`}
+                  tone={wStats.change > 0 ? "up" : wStats.change < 0 ? "down" : "neutral"}
+                />
+                <StatTile
+                  label="Thấp nhất"
+                  value={`${wStats.min.toFixed(1)} kg`}
+                  tone="mint"
+                />
+                <StatTile
+                  label="Cao nhất"
+                  value={`${wStats.max.toFixed(1)} kg`}
+                  tone="lilac"
+                />
+              </div>
+            )}
+
+            {/* Lịch sử */}
+            {weights.length > 0 && (
+              <div>
+                <p className="mb-2 font-display font-bold text-plum">Lịch sử 📒</p>
+                <ul className="space-y-2">
+                  {[...weights].reverse().map((w, i, arr) => {
+                    const prev = arr[i + 1]; // ngày cũ hơn liền kề
+                    const diff = prev
+                      ? Math.round((w.kg - prev.kg) * 10) / 10
+                      : null;
+                    return (
+                      <li
+                        key={w.date}
+                        className={`animate-pop-in flex items-center justify-between rounded-2xl px-4 py-2.5 ${
+                          w.date === selectedDate ? "bg-rose-tint" : "bg-blush"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDate(w.date)}
+                          className="font-semibold text-plum hover:text-rose-deep"
+                        >
+                          {w.date.split("-").reverse().join("/")}
+                        </button>
+                        <span className="flex items-center gap-3">
+                          {diff !== null && diff !== 0 && (
+                            <span
+                              className={`text-xs font-bold ${
+                                diff > 0 ? "text-rose-deep" : "text-emerald-500"
+                              }`}
+                            >
+                              {diff > 0 ? "▲" : "▼"} {Math.abs(diff).toFixed(1)}
+                            </span>
+                          )}
+                          <span className="font-bold text-rose">
+                            {w.kg.toFixed(1)} kg
+                          </span>
+                          <Button
+                            isIconOnly
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`Xoá ngày ${w.date}`}
+                            onPress={() => removeWeight(w.date)}
+                            className="text-plum-soft hover:text-rose-deep"
+                          >
+                            ✕
+                          </Button>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </Card.Content>
+        </Card>
+      </section>
+
       <footer className="mt-10 text-center text-xs text-plum-soft/70">
         MèoCalo 🐱 · Dữ liệu lưu trên Supabase · Calo chỉ mang tính tham khảo
       </footer>
@@ -819,6 +1066,40 @@ function GoalCalculator({ onApply }: { onApply: (v: number) => void }) {
       >
         Dùng mức này
       </Button>
+    </div>
+  );
+}
+
+/* ---- Ô thống kê cân nặng ---- */
+function StatTile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "rose" | "up" | "down" | "neutral" | "mint" | "lilac";
+}) {
+  const bg: Record<string, string> = {
+    rose: "bg-rose-tint",
+    up: "bg-rose-tint",
+    down: "bg-mint/50",
+    neutral: "bg-blush",
+    mint: "bg-mint/50",
+    lilac: "bg-lilac",
+  };
+  const fg: Record<string, string> = {
+    rose: "text-rose",
+    up: "text-rose-deep",
+    down: "text-emerald-600",
+    neutral: "text-plum",
+    mint: "text-plum",
+    lilac: "text-plum",
+  };
+  return (
+    <div className={`rounded-2xl px-3 py-2.5 text-center ${bg[tone]}`}>
+      <div className={`font-display text-lg font-bold ${fg[tone]}`}>{value}</div>
+      <div className="text-xs font-semibold text-plum-soft">{label}</div>
     </div>
   );
 }

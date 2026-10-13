@@ -10,6 +10,7 @@ Dựng bằng **Next.js 16 (App Router)** · **HeroUI v3** · **Tailwind CSS v4*
 - 💕 Thêm nhanh từ danh sách món Việt phổ biến (calo tham khảo)
 - 🐱 Vòng tròn calo có bé mèo đổi biểu cảm theo mức nạp vào (đói → vui → no → quá no)
 - 🎯 Đặt mục tiêu calo mỗi ngày, kèm bộ **gợi ý theo cơ thể** (Mifflin–St Jeor, chọn nam/nữ)
+- ⚖️ **Cân nặng theo ngày + thống kê:** ghi cân nặng cho từng ngày (mỗi ngày một số đo, lưu lại sẽ ghi đè), biểu đồ đường theo thời gian, các chỉ số hiện tại / thay đổi / thấp nhất / cao nhất và lịch sử có mũi tên tăng–giảm
 - 📅 **Lịch sử theo ngày:** xem lại nhật ký từng ngày, biểu đồ 7 ngày, số ngày đạt mục tiêu
 - ☁️ Lưu dữ liệu trên **Supabase** (đồng bộ theo mã thiết bị)
 - 📲 **PWA:** cài đặt như ứng dụng trên điện thoại/desktop, có màn hình offline
@@ -24,6 +25,7 @@ Dựng bằng **Next.js 16 (App Router)** · **HeroUI v3** · **Tailwind CSS v4*
 
 1. Tạo project tại [supabase.com](https://supabase.com).
 2. Mở **SQL Editor → New query**, dán toàn bộ nội dung [`supabase/schema.sql`](supabase/schema.sql) và chạy để tạo bảng.
+   - Nếu đã tạo DB từ trước (chưa có bảng cân nặng), chạy thêm migration [`supabase/migrations/2026-10-13_weights.sql`](supabase/migrations/2026-10-13_weights.sql).
 3. Vào **Project Settings → API**, sao chép **Project URL** và **anon public key**.
 4. Tạo file `.env.local` (tham khảo `.env.example`) và điền:
 
@@ -58,31 +60,32 @@ app/
   layout.tsx        # Bố cục gốc, nạp font Fredoka + Nunito
   page.tsx          # Toàn bộ logic & giao diện ứng dụng
   globals.css       # Tailwind + HeroUI + bảng màu hồng pastel
-app/
   manifest.ts       # Web App Manifest (PWA)
   offline/page.tsx  # Màn hình dự phòng khi mất mạng
 components/
   CatMascot.tsx     # Bé mèo SVG, đổi biểu cảm theo tâm trạng
   CalorieRing.tsx   # Vòng tròn tiến độ calo có mèo ở giữa
+  WeightChart.tsx   # Biểu đồ đường cân nặng theo ngày (SVG)
   HistoryPanel.tsx  # Biểu đồ & danh sách lịch sử nhiều ngày
+  StreakCalendar.tsx # Lịch 30 ngày + chuỗi ngày đạt mục tiêu
   ServiceWorkerRegister.tsx  # Đăng ký service worker (PWA)
 public/
   sw.js             # Service worker (cache app shell + offline)
   icons/            # Icon PWA (192, 512, maskable, apple-touch)
 lib/
-  foods.ts          # Danh sách bữa ăn & món thêm nhanh
+  foods.ts          # Danh sách bữa ăn
   supabase.ts       # Khởi tạo client Supabase
-  db.ts             # Truy vấn dữ liệu (món ăn, mục tiêu, lịch sử)
+  db.ts             # Truy vấn dữ liệu (món ăn, tập luyện, mục tiêu, cân nặng, lịch sử)
   date.ts           # Tiện ích xử lý ngày (khóa YYYY-MM-DD, nhãn tiếng Việt)
   deviceId.ts       # Sinh & lưu mã thiết bị
 supabase/
   schema.sql        # DDL tạo bảng + RLS cho Supabase
+  migrations/       # Các migration bổ sung cho DB đã tồn tại
 ```
 
 ## Tùy chỉnh nhanh
 
 - **Đổi màu:** sửa các biến `--color-*` trong `app/globals.css`.
-- **Đổi món thêm nhanh:** sửa mảng `QUICK_FOODS` trong `lib/foods.ts`.
 - **Đổi font:** thay thẻ `<link>` Google Fonts trong `app/layout.tsx` và biến `--font-*`.
 
-> Lưu ý: các con số calo chỉ mang tính tham khảo, không thay thế tư vấn dinh dưỡng chuyên môn.
+> Lưu ý: các con số calo & cân nặng chỉ mang tính tham khảo, không thay thế tư vấn dinh dưỡng/y tế chuyên môn.
